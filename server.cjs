@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const { spawn } = require('node:child_process');
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -22,6 +23,11 @@ db.exec(`
     x REAL, y REAL, fields TEXT NOT NULL,
     rev INTEGER NOT NULL DEFAULT 1, deleted INTEGER NOT NULL DEFAULT 0,
     UNIQUE(plan, seq)
+  );
+  CREATE TABLE IF NOT EXISTS regions (
+    id TEXT PRIMARY KEY, plan TEXT NOT NULL REFERENCES plans(id), name TEXT NOT NULL,
+    x1 REAL NOT NULL, y1 REAL NOT NULL, x2 REAL NOT NULL, y2 REAL NOT NULL,
+    rev INTEGER NOT NULL DEFAULT 1, deleted INTEGER NOT NULL DEFAULT 0
   );
 `);
 const fieldNames = ['name','type','model','maker','pressure','diameter','date','notes'];
@@ -79,6 +85,78 @@ function valves(plan) {
   return db.prepare('SELECT id,seq,x,y,fields,rev FROM valves WHERE plan=? AND deleted=0 ORDER BY seq').all(plan)
     .map(v => ({...v, fields:JSON.parse(v.fields)}));
 }
+function regions(plan) {
+  return db.prepare('SELECT id,name,x1,y1,x2,y2,rev FROM regions WHERE plan=? AND deleted=0 ORDER BY rowid').all(plan);
+}
+function imageDimensions(bytes) {
+  const b = Buffer.from(bytes);
+  if (b.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex')) && b.length >= 24) {
+    return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  }
+  if (b[0] === 255 && b[1] === 216) {
+    let offset = 2;
+    while (offset + 8 < b.length) {
+      if (b[offset++] !== 255) break;
+      while (b[offset] === 255) offset++;
+      const marker = b[offset++];
+      if (marker === 217 || marker === 218) break;
+      if (marker === 1 || (marker >= 208 && marker <= 215)) continue;
+      const length = b.readUInt16BE(offset);
+      if (length < 2) break;
+      if ([192,193,194,195,197,198,199,201,202,203,205,206,207].includes(marker)) {
+        return [b.readUInt16BE(offset + 5), b.readUInt16BE(offset + 3)];
+      }
+      offset += length;
+    }
+  }
+  if (b.toString('ascii',0,4) === 'RIFF') {
+    const format = b.toString('ascii',12,16);
+    if (format === 'VP8X' && b.length >= 30) return [1+b.readUIntLE(24,3),1+b.readUIntLE(27,3)];
+    if (format === 'VP8L' && b.length >= 25) {
+      const bits = b.readUInt32LE(21);
+      return [(bits & 16383)+1, ((bits >>> 14) & 16383)+1];
+    }
+    if (format === 'VP8 ' && b.length >= 30) return [b.readUInt16LE(26)&16383,b.readUInt16LE(28)&16383];
+  }
+  return [null, null];
+}
+let exporting = false;
+async function exportExcel(res, url) {
+  if (exporting) fail(429,'正在生成其他导出，请稍后重试');
+  const plan = url.searchParams.get('plan');
+  const regionId = url.searchParams.get('region');
+  const plans = db.prepare('SELECT id,name,image FROM plans ORDER BY rowid').all().filter(p => !plan || p.id === plan);
+  if (!plans.length) fail(404,'图纸不存在');
+  if (regionId && !plans.some(p => regions(p.id).some(r => r.id === regionId))) fail(404,'区域不存在');
+  const rows = [];
+  for (const p of plans) {
+    const [width,height] = imageDimensions(p.image);
+    const areas = regions(p.id);
+    for (const v of valves(p.id)) {
+      const matches = areas.filter(r => v.x !== null && v.x >= r.x1 && v.x <= r.x2 && v.y >= r.y1 && v.y <= r.y2);
+      if (regionId && !matches.some(r => r.id === regionId)) continue;
+      rows.push({plan:p.name,planId:p.id,width,height,...v,regions:matches.map(r => r.name).join('、')});
+    }
+  }
+  exporting = true;
+  try {
+    const bytes = await new Promise((resolve,reject) => {
+      const child = spawn(process.env.EXPORT_PYTHON || (process.platform==='win32'?'python':'/usr/bin/python3'),
+        [path.join(__dirname,'deploy/export_excel.py')],{windowsHide:true});
+      const chunks = [];
+      child.stdout.on('data', c => chunks.push(c));
+      child.stderr.on('data', () => {});
+      child.stdin.on('error', () => {});
+      child.on('error', reject);
+      child.on('close', code => code===0 ? resolve(Buffer.concat(chunks)) : reject(new Error('Excel export failed')));
+      const timer = setTimeout(() => {child.kill();reject(new Error('Excel export timeout'));},30000);
+      child.on('close', () => clearTimeout(timer));
+      child.stdin.end(JSON.stringify(rows));
+    });
+    res.setHeader('Content-Disposition','attachment; filename="valvemap.xlsx"');
+    send(res,200,bytes,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  } finally { exporting = false; }
+}
 function validFields(input) {
   const result = {};
   for (const key of fieldNames) {
@@ -99,6 +177,7 @@ async function handle(req,res) {
     const [file,mime]=assets.get(route);
     return send(res,200,fs.readFileSync(path.join(__dirname,'public',file)),mime);
   }
+  if (route==='/api/export.xlsx' && req.method==='GET') return exportExcel(res,url);
   if (req.method!=='GET' && (req.headers['x-atlas-request']!=='1' ||
       (req.headers.origin && new URL(req.headers.origin).host!==req.headers.host))) fail(403,'请求来源无效');
   if (route==='/api/plans' && req.method==='GET') {
@@ -116,7 +195,7 @@ async function handle(req,res) {
       return send(res,201,{id});
     } finally { activeUploads--; }
   }
-  const match=route.match(/^\/api\/plans\/([\w-]+)\/(image|valves)(?:\/([\w-]+))?$/);
+  const match=route.match(/^\/api\/plans\/([\w-]+)\/(image|valves|regions)(?:\/([\w-]+))?$/);
   if (!match) fail(404,'找不到该页面');
   const [,plan,resource,id]=match;
   const p=db.prepare('SELECT mime FROM plans WHERE id=?').get(plan);
@@ -124,6 +203,31 @@ async function handle(req,res) {
   if (resource==='image' && req.method==='GET' && !id) {
     const image=Buffer.from(db.prepare('SELECT image FROM plans WHERE id=?').get(plan).image);
     return send(res,200,image,p.mime);
+  }
+  if (resource==='regions') {
+    if (!id && req.method==='GET') return send(res,200,regions(plan));
+    let body;
+    try { body=JSON.parse((await read(req,4096)).toString()); } catch { fail(400,'区域资料格式有误'); }
+    if (!body || typeof body!=='object') fail(400,'区域资料格式有误');
+    if (id && req.method==='DELETE') {
+      const r=db.prepare('UPDATE regions SET deleted=1,rev=rev+1 WHERE id=? AND plan=? AND rev=? AND deleted=0').run(id,plan,Number(body.rev));
+      if (!r.changes) fail(409,'区域已有变更，请刷新后重试');
+      return send(res,200,{id});
+    }
+    if ((!id && req.method==='POST') || (id && req.method==='PUT')) {
+      if (typeof body.name!=='string' || !body.name.trim() || body.name.length>100) fail(400,'请填写 100 字以内的区域名称');
+      const {x1,y1,x2,y2}=body;
+      if (![x1,y1,x2,y2].every(n=>Number.isFinite(n)&&n>=0&&n<=1) || x2<=x1 || y2<=y1) fail(400,'区域范围有误');
+      if (id) {
+        const r=db.prepare('UPDATE regions SET name=?,x1=?,y1=?,x2=?,y2=?,rev=rev+1 WHERE id=? AND plan=? AND rev=? AND deleted=0').run(body.name.trim(),x1,y1,x2,y2,id,plan,Number(body.rev));
+        if (!r.changes) fail(409,'区域已有变更，请刷新后重试');
+      } else {
+        checkId(body.id);
+        db.prepare('INSERT INTO regions(id,plan,name,x1,y1,x2,y2) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING').run(body.id,plan,body.name.trim(),x1,y1,x2,y2);
+      }
+      return send(res,200,{id:id||body.id});
+    }
+    fail(405,'不支持的操作');
   }
   if (resource!=='valves') fail(405,'不支持的操作');
   if (!id && req.method==='GET') return send(res,200,valves(plan));

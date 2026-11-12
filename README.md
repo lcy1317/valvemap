@@ -2,7 +2,11 @@
 
 设备平面图上的阀门点位管理，支持图纸上传、缩放、标记和资料维护。
 
-需要 Node.js 22.13 或以上版本。运行 `node server.cjs`，默认监听 19999 端口。环境变量 `HOST`、`PORT` 和 `DATA_DIR` 可配置监听地址、端口和 SQLite 数据目录。图纸、点位和阀门资料保存在数据库中。
+需要 Node.js 22.13 或以上版本，Excel 导出需要 Python 3.9 或以上版本。运行 `node server.cjs`，默认监听 19999 端口。环境变量 `HOST`、`PORT` 和 `DATA_DIR` 可配置监听地址、端口和 SQLite 数据目录。图纸、区域、点位和阀门资料保存在数据库中。Windows 导出使用 PATH 中的 Python，其余系统默认使用 `/usr/bin/python3`，可通过 `EXPORT_PYTHON` 覆盖。
+
+图纸支持最高 6400% 放大，可在“图纸显示”中调整比例和点位大小。新建区域时依次点击矩形的两个对角，框内阀门会自动出现在该区域清单。区域可以重命名和移除。
+
+Excel 可导出所有图纸、当前图纸或当前区域的阀门。包含资料、区域、所属图纸、标准化坐标与原始图纸像素坐标，坐标原点为图纸左上角，X 向右、Y 向下。待定位阀门的坐标留空。
 
 Mac mini 通过系统 LaunchDaemon 运行，监听 `127.0.0.1:8888`，由 Cloudflare Tunnel 提供 HTTPS。数据库位于用户目录的 `Library/Application Support/ValveMap`，定时快照保存在同级 `ValveMapBackups`。
 

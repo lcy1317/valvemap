@@ -8,6 +8,20 @@ aside{display:flex;flex-direction:column;position:relative}#inventory,#detail{di
 #detail{padding:18px}.back{align-self:flex-start;font-size:13px;padding:0;border:0;background:none;color:#63746a;margin-bottom:22px}.detail-title{display:flex;gap:8px;align-items:center}.detail-title .subtle{margin:0}#detail h2{font-size:21px;margin:10px 0 14px;overflow-wrap:anywhere}dl{margin:0}dl div{display:grid;grid-template-columns:75px 1fr;border-top:1px solid var(--line);padding:9px 0;font-size:13px}dt{color:var(--muted)}dd{margin:0;overflow-wrap:anywhere;white-space:pre-wrap}.detail-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}.detail-actions button{font-size:12px;padding:6px 9px}.remove{color:#a64c37}.empty-action{margin:0 18px 15px}.hint i canvas{width:16px;height:16px}
 dialog{border:1px solid var(--line);border-radius:12px;padding:24px;color:var(--text);background:var(--paper);max-width:min(460px,calc(100vw - 24px));width:460px;max-height:90dvh;box-shadow:0 20px 70px #1a332a40}dialog::backdrop{background:#172d2866}.dialog-head{margin-bottom:16px}.close{font-size:23px;font-weight:400}.upload-file{display:flex;position:relative;flex-direction:column;align-items:center;gap:5px;border:1px dashed #9fae9c;border-radius:8px;background:#f1f4ec;padding:23px 10px;text-align:center;cursor:pointer}.upload-file span{overflow-wrap:anywhere}.upload-file input{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}.upload-file small{color:var(--muted)}.field{display:flex;flex-direction:column;gap:5px;font-size:13px;margin-top:12px}.field input,.field textarea{border:1px solid #c7d3c8;background:#fff;border-radius:5px;padding:8px;width:100%;min-width:0;color:var(--text)}.field textarea{resize:vertical}.fields{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.fields .wide{grid-column:1/-1}.actions{justify-content:flex-end;gap:8px;margin-top:20px}.danger{background:#a64c37;color:white}.error{font-size:13px;color:#ab3d27;white-space:pre-wrap}.error:empty{margin:0}#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--pine);color:#fff;border-radius:8px;padding:10px 18px;z-index:4;text-align:center;max-width:90vw}
 #field-note{margin-left:auto;color:#456952;font-size:12px;text-underline-offset:3px}#sheet-ref{border-left:1px solid var(--line);padding-left:10px;margin-left:4px;font:11px var(--mono);letter-spacing:.3px}.pending-info{margin:0 0 14px;padding:7px 10px;color:#814f2e;background:#f5ecdd;font-size:13px;border-radius:4px}
+.page-actions{display:flex;gap:8px;flex:none}
+.region-filter{display:flex;gap:6px;padding:0 16px 10px;flex:none}
+.region-filter select{flex:1;min-width:0;max-width:100%;border:1px solid var(--line);border-radius:5px;padding:7px;font-size:13px}
+.region-filter button{font-size:12px;padding:5px 8px}
+#add-region{font-size:13px;white-space:nowrap;padding:8px 10px}
+#add-region.active{border-color:#589c85;background:#dfefe4}
+.region-box{position:absolute;border:calc(1.5px * var(--inv)) dashed #408e72;background:#3e9d750b;pointer-events:none;z-index:1}
+.region-box.selected{border-color:#176c51;background:#3e9d751a}
+.region-label{position:absolute;left:0;top:0;transform-origin:top left;transform:scale(var(--inv));pointer-events:auto;padding:3px 7px;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#14583f;background:#e2f2e4;border:1px solid #76a58d;border-radius:0 0 5px 0;font-size:12px;font-weight:600}
+.region-corner{position:absolute;transform:translate(-50%,-50%) scale(var(--inv));width:14px;height:14px;border:2px solid #18714f;border-radius:50%;background:white;pointer-events:none;z-index:5}
+.pin{width:var(--pin-size,32px);height:var(--pin-size,32px);font-size:clamp(6px,calc(var(--pin-size,32px) * .34),13px);z-index:4}
+.pin:after{content:"";position:absolute;left:50%;top:50%;width:max(18px,var(--pin-size,32px));height:max(18px,var(--pin-size,32px));transform:translate(-50%,-50%);border-radius:50%}
+.field select{border:1px solid #c7d3c8;padding:9px;background:white;border-radius:5px;max-width:100%;font-weight:400}
+#pin-size{padding:0}
 .phone-label,.mobile-nav{display:none}
 @media (max-width:800px),(max-width:1000px) and (max-height:520px) and (pointer:coarse){
   html,body{margin:0;height:100%;overscroll-behavior:none}
@@ -25,6 +39,9 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:24px;color:var(--
   }
   main .page-head{flex:none;min-height:59px;margin:0;padding:4px 3px;gap:7px}
   main .page-head h1{font-size:22px;letter-spacing:-.5px}
+  main .page-head h1{font-size:18px;white-space:nowrap}
+  .page-head .page-actions{gap:5px}
+  .page-head .page-actions button{min-height:42px;font-size:12px;padding:7px 8px;gap:4px}
   main .page-head p,main .hint{display:none}
   .page-head #upload{min-height:42px;font-size:13px;padding:7px 12px}
   main .layout{
@@ -37,7 +54,11 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:24px;color:var(--
   .maphead .plan-title{flex:1;min-width:0;gap:4px}
   .plan-title .tag{display:none}
   .plan-title #plans{min-width:0;max-width:100%;flex:1;font-size:16px;height:44px;border-radius:4px}
-  .maphead #add{min-height:44px;padding:7px 9px;gap:5px;font-size:13px}
+  .maphead #add{min-height:44px;padding:7px 8px;gap:4px;font-size:12px}
+  .maphead #add i{display:none}
+  .maphead #add-region{min-height:44px;font-size:12px;padding:6px 8px}
+  .region-filter{padding:0 12px 10px}
+  .region-filter select,.region-filter button{min-height:44px;font-size:14px}
   .layout #viewport{grid-area:2/1;height:auto;min-height:0}
   .layout .mapfoot{grid-area:3/1;min-height:48px;gap:2px;padding:2px 4px 2px 10px}
   .mapfoot #sheet-ref{display:none}.mapfoot .legend{gap:5px;font-size:11px}
@@ -46,7 +67,6 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:24px;color:var(--
   .mapfoot .tools button{min-width:44px;min-height:44px}
   .tools #fit{width:auto;padding:0 6px;gap:3px;font-size:12px}
   .phone-label{display:inline-flex}
-  .pin:after{content:"";position:absolute;inset:-8px;border-radius:50%}
   .layout #side{grid-area:2/1/4/2;display:none;border:0;border-radius:0;box-shadow:none;min-height:0}
   [data-mobile-view="records"] .layout #side{display:flex}
   [data-mobile-view="records"] #viewport,[data-mobile-view="records"] .mapfoot{visibility:hidden}
@@ -87,11 +107,13 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:24px;color:var(--
 @media(max-width:365px){
   .maphead .plan-title>i{display:none}
   .maphead #add{font-size:12px}
+  .page-head .page-actions i{display:none}
+  main .page-head h1{font-size:17px}
 }
 @media(max-height:520px) and (orientation:landscape) and (max-width:1000px) and (pointer:coarse){
-  body .mast{height:calc(44px + env(safe-area-inset-top));padding-right:calc(122px + env(safe-area-inset-right))}
+  body .mast{height:calc(44px + env(safe-area-inset-top));padding-right:calc(212px + env(safe-area-inset-right))}
   main .page-head{position:absolute;right:max(8px,env(safe-area-inset-right));top:env(safe-area-inset-top);min-height:44px;padding:0}
-  main .page-head>div{display:none}.page-head #upload{background:transparent;border:0}
+  main .page-head>div:first-child{display:none}.page-head #upload{background:transparent;border:0}
   body main{padding-bottom:2px}
   .layout .maphead{min-height:44px;padding-block:0}
   .layout .mapfoot{position:absolute;right:3px;bottom:3px;border:1px solid var(--line);border-radius:7px;background:var(--paper);padding:0}

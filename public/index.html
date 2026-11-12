@@ -4,15 +4,15 @@
 <body data-mobile-view="map">
 <header class="mast"><div class="brand"><img src="/icon.png" alt="" width="34" height="34"><strong>阀图</strong><span>VALVE ATLAS</span></div><span id="connection" role="status">连接中</span></header>
 <main>
-<div class="page-head"><div><h1>阀门定位工作台</h1><p>生物质汽机间 · 设备平面图与现场阀门档案</p></div><button class="primary" id="upload"><i data-i="upload"></i>上传图纸</button></div>
+<div class="page-head"><div><h1>阀门定位工作台</h1><p>生物质汽机间 · 设备平面图与现场阀门档案</p></div><div class="page-actions"><button id="export"><i data-i="download"></i>导出 Excel</button><button class="primary" id="upload"><i data-i="upload"></i>上传图纸</button></div></div>
 <div class="layout">
 <section class="map-card">
-<div class="maphead"><div class="plan-title"><i data-i="layers"></i><select id="plans" aria-label="切换平面图"></select><span id="sample-tag" class="tag">CAD 图纸</span></div><button id="add" class="add"><i data-i="pin"></i><span>添加点位</span></button></div>
+<div class="maphead"><div class="plan-title"><i data-i="layers"></i><select id="plans" aria-label="切换平面图"></select><span id="sample-tag" class="tag">CAD 图纸</span></div><button id="add-region" title="框选阀门区域">＋区域</button><button id="add" class="add"><i data-i="pin"></i><span>添加点位</span></button></div>
 <div id="viewport" aria-label="图纸视图，可拖动或缩放"><div id="plane"><img draggable="false" id="plan-img" alt="当前设备平面图"></div><div class="map-alert" id="map-alert" hidden></div></div>
-<div class="mapfoot"><div class="legend"><span class="legend-dot"></span>阀门点位 <span id="sheet-ref"></span></div><div class="tools"><button id="out" aria-label="缩小"><i data-i="minus"></i></button><output id="zoom">100%</output><button id="in" aria-label="放大"><i data-i="plus"></i></button><b></b><button id="fit" title="适应窗口" aria-label="适应窗口"><i data-i="fit"></i><span class="phone-label">全图</span></button></div></div>
+<div class="mapfoot"><div class="legend"><span class="legend-dot"></span>阀门点位 <span id="sheet-ref"></span></div><div class="tools"><button id="display" title="调整点位大小和缩放比例" aria-label="显示设置"><i data-i="settings"></i></button><button id="out" aria-label="缩小"><i data-i="minus"></i></button><output id="zoom">100%</output><button id="in" aria-label="放大"><i data-i="plus"></i></button><b></b><button id="fit" title="适应窗口" aria-label="适应窗口"><i data-i="fit"></i><span class="phone-label">全图</span></button></div></div>
 </section>
 <aside id="side" aria-label="阀门清单与资料">
-<section id="inventory"><div class="side-head"><h2>阀门清单</h2><span id="count" class="count">0</span><a id="field-note" href="/field-note.jpg" target="_blank" rel="noopener" hidden>手写原件 ↗</a></div><label class="search"><i data-i="search"></i><input id="filter" type="search" placeholder="搜索名称、编号或型号" aria-label="搜索阀门"></label><div id="list"></div></section>
+<section id="inventory"><div class="side-head"><h2>阀门清单</h2><span id="count" class="count">0</span><a id="field-note" href="/field-note.jpg" target="_blank" rel="noopener" hidden>手写原件 ↗</a></div><div class="region-filter"><select id="regions" aria-label="按阀门区域筛选"><option value="">全部区域</option></select><button id="manage-region" disabled>编辑区域</button></div><label class="search"><i data-i="search"></i><input id="filter" type="search" placeholder="搜索名称、编号或型号" aria-label="搜索阀门"></label><div id="list"></div></section>
 <section id="detail" hidden></section>
 </aside>
 </div>
@@ -22,6 +22,9 @@
 <button type="button" id="mobile-map" aria-pressed="true"><i data-i="layers"></i>图纸</button>
 <button type="button" id="mobile-records" aria-pressed="false"><i data-i="records"></i>阀门清单<span id="mobile-count"></span></button>
 </nav>
+<dialog id="region-dialog"><form id="region-form"><div class="dialog-head"><h2 id="region-title">新建区域</h2><button type="button" class="close" aria-label="关闭">×</button></div><label class="field">区域名称<input id="region-name" required maxlength="100" placeholder="例如：低加阀门区"></label><p class="subtle">区域内的阀门会自动列入该区域。</p><p class="error" role="alert"></p><div class="actions"><button type="button" id="remove-region" class="remove" hidden>移除区域</button><button type="button" class="cancel">取消</button><button class="primary" type="submit">保存区域</button></div></form></dialog>
+<dialog id="export-dialog"><form id="export-form"><div class="dialog-head"><h2>导出阀门 Excel</h2><button type="button" class="close" aria-label="关闭">×</button></div><label class="field">导出范围<select id="export-scope"><option value="all">所有图纸的阀门</option><option value="plan">当前图纸的阀门</option><option value="region">当前区域的阀门</option></select></label><p class="subtle">包含图纸、区域、坐标和阀门资料，坐标以图纸左上角为原点。</p><p class="error" role="alert"></p><div class="actions"><button type="button" class="cancel">取消</button><button class="primary" type="submit">下载 Excel</button></div></form></dialog>
+<dialog id="display-dialog"><form id="display-form"><div class="dialog-head"><h2>图纸显示</h2><button type="button" class="close" aria-label="关闭">×</button></div><label class="field">点位大小<input id="pin-size" type="range" min="18" max="44" value="32"></label><p class="subtle">点位随图纸放大逐渐缩小，便于查看密集位置。</p><label class="field">缩放比例（%）<input id="zoom-value" type="number" min="40" max="6400" step="1" required></label><p class="error" role="alert"></p><div class="actions"><button type="button" class="cancel">关闭</button><button class="primary" type="submit">应用缩放</button></div></form></dialog>
 <dialog id="upload-dialog"><form id="upload-form"><div class="dialog-head"><h2>上传平面图</h2><button type="button" class="close" aria-label="关闭">×</button></div>
 <label class="upload-file"><i data-i="upload"></i><span id="filename">选择图纸图片</span><small>PNG、JPG 或 WebP · 最大 16 MB</small><input id="file" type="file" accept="image/jpeg,image/png,image/webp" required></label>
 <label class="field">图纸名称<input id="plan-name" required maxlength="100" placeholder="例如：汽机一楼"></label><p class="error" role="alert"></p><div class="actions"><button type="button" class="cancel">取消</button><button class="primary" type="submit">上传图纸</button></div></form></dialog>
