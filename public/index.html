@@ -7,8 +7,8 @@
 <div class="page-head"><div><h1>阀门定位工作台</h1><p>生物质汽机间 · 设备平面图与现场阀门档案</p></div><div class="page-actions"><button id="export"><i data-i="download"></i>导出 Excel</button><button class="primary" id="upload"><i data-i="upload"></i>上传图纸</button></div></div>
 <div class="layout">
 <section class="map-card">
-<div class="maphead"><div class="plan-title"><i data-i="layers"></i><select id="plans" aria-label="切换平面图"></select><span id="sample-tag" class="tag">CAD 图纸</span></div><button id="add-region" title="框选阀门区域">＋区域</button><button id="add" class="add"><i data-i="pin"></i><span>添加点位</span></button></div>
-<div id="viewport" aria-label="图纸视图，可拖动或缩放"><div id="plane"><img draggable="false" id="plan-img" alt="当前设备平面图"></div><div class="map-alert" id="map-alert" hidden></div></div>
+<div class="maphead"><div class="plan-title"><i data-i="layers"></i><select id="plans" aria-label="切换平面图"></select><span id="sample-tag" class="tag">CAD 图纸</span></div><button id="add-region" title="框选阀门区域" disabled>＋区域</button><button id="add" class="add" disabled><i data-i="pin"></i><span>添加点位</span></button></div>
+<div id="viewport" aria-label="图纸视图，可拖动或缩放"><div id="plane" hidden><img draggable="false" id="plan-img" alt="当前设备平面图"></div><div class="map-alert" id="map-alert" hidden></div></div>
 <div class="mapfoot"><div class="legend"><span class="legend-dot"></span>阀门点位 <span id="sheet-ref"></span></div><div class="tools"><button id="display" title="调整点位大小和缩放比例" aria-label="显示设置"><i data-i="settings"></i></button><button id="out" aria-label="缩小"><i data-i="minus"></i></button><output id="zoom">100%</output><button id="in" aria-label="放大"><i data-i="plus"></i></button><b></b><button id="fit" title="适应窗口" aria-label="适应窗口"><i data-i="fit"></i><span class="phone-label">全图</span></button></div></div>
 </section>
 <aside id="side" aria-label="阀门清单与资料">
