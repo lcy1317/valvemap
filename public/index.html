@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<meta name="theme-color" content="#183f3d"><title>阀图 · 阀门定位工作台</title><link rel="icon" href="/icon.png"><link rel="stylesheet" href="/style.css"></head>
+<body data-mobile-view="map">
+<header class="mast"><div class="brand"><img src="/icon.png" alt="" width="34" height="34"><strong>阀图</strong><span>VALVE ATLAS</span></div><span id="connection" role="status">连接中</span></header>
+<main>
+<div class="page-head"><div><h1>阀门定位工作台</h1><p>生物质汽机间 · 设备平面图与现场阀门档案</p></div><button class="primary" id="upload"><i data-i="upload"></i>上传图纸</button></div>
+<div class="layout">
+<section class="map-card">
+<div class="maphead"><div class="plan-title"><i data-i="layers"></i><select id="plans" aria-label="切换平面图"></select><span id="sample-tag" class="tag">CAD 图纸</span></div><button id="add" class="add"><i data-i="pin"></i><span>添加点位</span></button></div>
+<div id="viewport" aria-label="图纸视图，可拖动或缩放"><div id="plane"><img draggable="false" id="plan-img" alt="当前设备平面图"></div><div class="map-alert" id="map-alert" hidden></div></div>
+<div class="mapfoot"><div class="legend"><span class="legend-dot"></span>阀门点位 <span id="sheet-ref"></span></div><div class="tools"><button id="out" aria-label="缩小"><i data-i="minus"></i></button><output id="zoom">100%</output><button id="in" aria-label="放大"><i data-i="plus"></i></button><b></b><button id="fit" title="适应窗口" aria-label="适应窗口"><i data-i="fit"></i><span class="phone-label">全图</span></button></div></div>
+</section>
+<aside id="side" aria-label="阀门清单与资料">
+<section id="inventory"><div class="side-head"><h2>阀门清单</h2><span id="count" class="count">0</span><a id="field-note" href="/field-note.jpg" target="_blank" rel="noopener" hidden>手写原件 ↗</a></div><label class="search"><i data-i="search"></i><input id="filter" type="search" placeholder="搜索名称、编号或型号" aria-label="搜索阀门"></label><div id="list"></div></section>
+<section id="detail" hidden></section>
+</aside>
+</div>
+<p class="hint"><i data-i="mouse"></i>滚轮或双指缩放，拖动平移，点击点位查看阀门资料。</p>
+</main>
+<nav class="mobile-nav" aria-label="工作台视图">
+<button type="button" id="mobile-map" aria-pressed="true"><i data-i="layers"></i>图纸</button>
+<button type="button" id="mobile-records" aria-pressed="false"><i data-i="records"></i>阀门清单<span id="mobile-count"></span></button>
+</nav>
+<dialog id="upload-dialog"><form id="upload-form"><div class="dialog-head"><h2>上传平面图</h2><button type="button" class="close" aria-label="关闭">×</button></div>
+<label class="upload-file"><i data-i="upload"></i><span id="filename">选择图纸图片</span><small>PNG、JPG 或 WebP · 最大 16 MB</small><input id="file" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+<label class="field">图纸名称<input id="plan-name" required maxlength="100" placeholder="例如：汽机一楼"></label><p class="error" role="alert"></p><div class="actions"><button type="button" class="cancel">取消</button><button class="primary" type="submit">上传图纸</button></div></form></dialog>
+<dialog id="edit-dialog"><form id="edit-form"><div class="dialog-head"><h2 id="edit-title">新增阀门点位</h2><button type="button" class="close" aria-label="关闭">×</button></div><div id="fields" class="fields"></div><p class="error" role="alert"></p><div class="actions"><button type="button" class="cancel">取消</button><button class="primary" type="submit">保存点位</button></div></form></dialog>
+<dialog id="delete-dialog"><form id="delete-form"><div class="dialog-head"><h2>移除阀门点位</h2><button type="button" class="close" aria-label="关闭">×</button></div><p id="delete-text"></p><p class="error" role="alert"></p><div class="actions"><button type="button" class="cancel">取消</button><button class="danger" type="submit">确认移除</button></div></form></dialog>
+<div id="toast" role="status" hidden></div><script src="/app.js"></script>
+</body></html>
