@@ -56,9 +56,9 @@ transaction(() => {
 });
 
 function fail(status, message) { throw Object.assign(new Error(message), { status }); }
-function send(res, status, body, mime = 'application/json; charset=utf-8') {
+function send(res, status, body, mime = 'application/json; charset=utf-8', cache = 'no-store') {
   res.writeHead(status, {'Content-Type':mime, 'X-Content-Type-Options':'nosniff',
-    'Cache-Control':'no-store', 'Referrer-Policy':'same-origin',
+    'Cache-Control':cache, 'Referrer-Policy':'same-origin',
     'Content-Security-Policy':"default-src 'self'; img-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'"});
   res.end(Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
@@ -194,6 +194,14 @@ async function handle(req,res) {
       db.prepare('INSERT INTO plans(id,name,mime,image) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING').run(id,name,mime,image);
       return send(res,201,{id});
     } finally { activeUploads--; }
+  }
+  const tileMatch=route.match(/^\/api\/plans\/(cad-0301-0[2-5])\/tiles\/(manifest\.json|[0-9]{1,2}\/[0-9]{1,4}_[0-9]{1,4}\.webp)$/);
+  if(tileMatch&&req.method==='GET'){
+    const [,id,tile]=tileMatch;
+    const filename=path.join(__dirname,'tiles',id,tile==='manifest.json'?tile:'drawing_files/'+tile);
+    if(!fs.existsSync(filename))fail(404,'图块不存在');
+    return send(res,200,fs.readFileSync(filename),tile==='manifest.json'?'application/json':'image/webp',
+      tile==='manifest.json'?'no-store':'public, max-age=86400');
   }
   const match=route.match(/^\/api\/plans\/([\w-]+)\/(image|valves|regions)(?:\/([\w-]+))?$/);
   if (!match) fail(404,'找不到该页面');

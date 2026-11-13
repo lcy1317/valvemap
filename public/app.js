@@ -6,6 +6,7 @@ const placeholders = {name:'例如：低加正常疏水旁路阀',pressure:'例�
 let planId='', records=[], selected=null, placing=null, draft=null, version=0, uploadId='', removeTarget=null;
 let base=1, zoom=1, tx=0, ty=0, ready=false, toastTimer;
 let areas=[],activeRegion='',regionDraft=null,pinSize=32;
+let tileManifest=null,frame=0;
 try { pinSize=Number(localStorage.getItem('valvemap-pin-size'))||32; } catch {}
 pinSize=Math.max(18,Math.min(44,pinSize));
 const phone=matchMedia('(max-width:800px), (max-width:1000px) and (max-height:520px) and (pointer:coarse)');
@@ -15,8 +16,26 @@ function mobileView(view) {
   el('mobile-map').setAttribute('aria-pressed',String(view==='map'));
   el('mobile-records').setAttribute('aria-pressed',String(view==='records'));
 }
-el('mobile-map').onclick=()=>mobileView('map');
+function closePanel(){
+  document.body.dataset.panel='';
+  document.body.dataset.expanded='false';
+}
+el('mobile-map').onclick=()=>{closePanel();mobileView('map');};
 el('mobile-records').onclick=()=>{show(null);mobileView('records');};
+el('close-region-sheet').onclick=closePanel;
+el('more-button').onclick=()=>{
+  const open=el('page-actions').classList.toggle('menu-open');
+  el('more-button').setAttribute('aria-expanded',String(open));
+};
+el('toggle-side').onclick=()=>{
+  document.body.dataset.sidebar=document.body.dataset.sidebar==='collapsed'?'':'collapsed';
+};
+el('focus-map').onclick=()=>{
+  const focus=document.body.dataset.focus!=='true';
+  document.body.dataset.focus=String(focus);
+  if(focus){closePanel();mobileView('map');}
+  el('focus-map').textContent=focus?'退出全屏':'全屏';
+};
 const make=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!=null)n.textContent=txt;return n;};
 const button=(label,cls,fn)=>{const b=make('button',cls,label);b.type='button';b.onclick=fn;return b;};
 const code=n=>String(n).padStart(2,'0');
@@ -46,6 +65,62 @@ function syncView() {
   plane.style.setProperty('--inv',1/s);
   plane.style.setProperty('--pin-size',Math.max(10,pinSize/Math.pow(Math.max(1,zoom),.32))+'px');
   el('zoom').value=Math.round(zoom*100)+'%';
+  if(!frame)frame=requestAnimationFrame(()=>{
+    frame=0;renderPins();positionRegionLabels();renderTiles();
+  });
+}
+function visibleMapHeight(){
+  if(!phone.matches||document.body.dataset.mobileView!=='map'||!document.body.dataset.panel)return viewport.clientHeight;
+  const side=el('side').getBoundingClientRect();
+  if(side.width<viewport.clientWidth*.8)return viewport.clientHeight;
+  const overlap=viewport.getBoundingClientRect().bottom-side.top;
+  return Math.max(80,viewport.clientHeight-Math.max(0,overlap));
+}
+function visibleMapWidth(){
+  if(!phone.matches||document.body.dataset.mobileView!=='map'||!document.body.dataset.panel)return viewport.clientWidth;
+  const side=el('side').getBoundingClientRect();
+  return side.width<viewport.clientWidth*.8?Math.max(80,side.left-viewport.getBoundingClientRect().left):viewport.clientWidth;
+}
+function focusBounds(x1,y1,x2,y2,maxZoom=64){
+  if(!ready)return;
+  const width=visibleMapWidth(),height=visibleMapHeight();
+  const naturalWidth=img.naturalWidth,naturalHeight=img.naturalHeight;
+  const scale=Math.min(Math.max(80,width-70)/(Math.max(.0001,x2-x1)*naturalWidth),
+    Math.max(80,height-70)/(Math.max(.0001,y2-y1)*naturalHeight));
+  zoom=Math.max(.4,Math.min(maxZoom,scale/base));
+  tx=width/2-(x1+x2)/2*naturalWidth*base*zoom;
+  ty=height/2-(y1+y2)/2*naturalHeight*base*zoom;
+  syncView();
+}
+function renderTiles(){
+  const layer=el('tiles');
+  if(!tileManifest||!ready)return;
+  const m=tileManifest,scale=base*zoom;
+  const fullScale=m.width/img.naturalWidth;
+  const desired=scale*Math.min(devicePixelRatio||1,2)/fullScale;
+  const level=Math.max(0,Math.min(m.maxLevel,m.maxLevel+Math.ceil(Math.log2(desired))));
+  if(m.width*Math.pow(2,level-m.maxLevel)<=img.naturalWidth){layer.replaceChildren();el('image-status').textContent='';return;}
+  const factor=Math.pow(2,level-m.maxLevel);
+  const levelWidth=Math.ceil(m.width*factor),levelHeight=Math.ceil(m.height*factor);
+  const sx=img.naturalWidth/levelWidth,sy=img.naturalHeight/levelHeight,size=m.tileSize;
+  const left=Math.max(0,Math.floor(-tx/scale/sx/size));
+  const top=Math.max(0,Math.floor(-ty/scale/sy/size));
+  const right=Math.min(Math.ceil(levelWidth/size)-1,Math.floor((viewport.clientWidth-tx)/scale/sx/size));
+  const bottom=Math.min(Math.ceil(levelHeight/size)-1,Math.floor((viewport.clientHeight-ty)/scale/sy/size));
+  const wanted=new Set();
+  for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
+    const key=level+'-'+x+'-'+y;wanted.add(key);
+    if(layer.querySelector('[data-tile="'+key+'"]'))continue;
+    const tile=make('img');tile.dataset.tile=key;tile.alt='';tile.draggable=false;
+    tile.style.left=x*size*sx+'px';tile.style.top=y*size*sy+'px';
+    tile.style.width=Math.min(size,levelWidth-x*size)*sx+'px';
+    tile.style.height=Math.min(size,levelHeight-y*size)*sy+'px';
+    tile.src='/api/plans/'+encodeURIComponent(planId)+'/tiles/'+level+'/'+x+'_'+y+'.webp';
+    tile.onerror=()=>tile.remove();
+    layer.append(tile);
+  }
+  layer.querySelectorAll('img').forEach(tile=>{if(!wanted.has(tile.dataset.tile))tile.remove();});
+  el('image-status').textContent='高清图纸';
 }
 function resizeMap(mode='preserve'){
   const w=viewport.clientWidth,h=viewport.clientHeight;
@@ -72,7 +147,7 @@ el('fit').onclick=()=>resizeMap('fit');el('in').onclick=()=>chooseZoom(1.2);el('
 new ResizeObserver(()=>resizeMap()).observe(viewport);
 function setPlacing(mode){
   placing=mode;
-  if(mode)mobileView('map');
+  if(mode){closePanel();mobileView('map');el('cluster-panel').hidden=true;}
   el('add').classList.toggle('active',!!mode&&mode.kind!=='region');
   el('add-region').classList.toggle('active',mode?.kind==='region');
   el('add').querySelector('span').textContent=mode&&mode.kind!=='region'?'取消标记':'添加点位';
@@ -91,14 +166,34 @@ function renderRegions(){
     const box=make('div','region-box'+(r.id===activeRegion?' selected':''));
     box.style.left=r.x1*100+'%';box.style.top=r.y1*100+'%';
     box.style.width=(r.x2-r.x1)*100+'%';box.style.height=(r.y2-r.y1)*100+'%';
-    const label=button(r.name,'region-label',e=>{
-      e.stopPropagation();activeRegion=r.id;el('regions').value=r.id;show(null);renderList();mobileView('records');
-    });
-    box.append(label);plane.prepend(box);
+    plane.prepend(box);
   }
   if(placing?.corner){
     const corner=make('div','region-corner');corner.style.left=placing.corner.x*100+'%';corner.style.top=placing.corner.y*100+'%';plane.append(corner);
   }
+  positionRegionLabels();
+}
+function positionRegionLabels(){
+  const layer=el('region-labels');layer.replaceChildren();
+  if(!ready||placing)return;
+  const scale=base*zoom,w=visibleMapWidth(),h=visibleMapHeight();
+  for(const r of areas){
+    const x1=tx+r.x1*img.naturalWidth*scale,y1=ty+r.y1*img.naturalHeight*scale;
+    const x2=tx+r.x2*img.naturalWidth*scale,y2=ty+r.y2*img.naturalHeight*scale;
+    if(x2<0||y2<0||x1>w||y1>h)continue;
+    const label=button(r.name,'region-label',()=>selectRegion(r.id,true));
+    label.style.left=Math.max(6,Math.min(w-160,x1+5))+'px';
+    label.style.top=Math.max(6,Math.min(h-35,y1-31))+'px';
+    layer.append(label);
+  }
+}
+function selectRegion(id,fromMap=false){
+  activeRegion=id;show(null);renderList();
+  const region=areas.find(r=>r.id===id);
+  if(region){
+    if(phone.matches&&fromMap){mobileView('map');document.body.dataset.panel='region';}
+    focusBounds(region.x1,region.y1,region.x2,region.y2);
+  }else if(!id){resizeMap('fit');}
 }
 function regionOptions(){
   const select=el('regions');select.replaceChildren(new Option('全部区域',''),new Option('未分区','none'));
@@ -107,7 +202,7 @@ function regionOptions(){
   select.value=activeRegion;el('manage-region').disabled=!areas.some(r=>r.id===activeRegion);
   renderRegions();
 }
-el('regions').onchange=()=>{activeRegion=el('regions').value;show(null);renderList();};
+el('regions').onchange=()=>selectRegion(el('regions').value);
 el('manage-region').onclick=()=>openRegion(areas.find(r=>r.id===activeRegion));
 function openRegion(r){
   regionDraft={...r};el('region-title').textContent=r.rev?'编辑区域':'新建区域';
@@ -115,19 +210,68 @@ function openRegion(r){
 }
 function renderPins(){
   plane.querySelectorAll('.pin').forEach(n=>n.remove());
-  records.filter(v=>v.x!==null).forEach(v=>{
-    const b=button(code(v.seq),'pin'+(v.id===selected?' selected':''),e=>{if(!placing){e.stopPropagation();show(v.id,true);}});
-    b.style.left=v.x*100+'%';b.style.top=v.y*100+'%';b.title=v.fields.name;b.setAttribute('aria-label',code(v.seq)+' '+v.fields.name);
+  if(!ready)return;
+  const scale=base*zoom;
+  const radius=Math.max(22,parseFloat(plane.style.getPropertyValue('--pin-size'))+7);
+  const groups=[];
+  for(const v of records.filter(v=>v.x!==null)){
+    let group=groups.find(g=>v.id!==selected&&g.every(p=>p.id!==selected)&&g.some(p=>
+      Math.hypot((p.x-v.x)*img.naturalWidth*scale,(p.y-v.y)*img.naturalHeight*scale)<radius));
+    if(!group){group=[];groups.push(group);}
+    group.push(v);
+  }
+  // Join groups connected by a nearby point, so a dense group has one selectable marker.
+  for(let i=0;i<groups.length;i++)for(let j=i+1;j<groups.length;j++){
+    if(groups[i].some(v=>v.id===selected)||groups[j].some(v=>v.id===selected))continue;
+    if(groups[i].some(a=>groups[j].some(b=>Math.hypot((a.x-b.x)*img.naturalWidth*scale,(a.y-b.y)*img.naturalHeight*scale)<radius))){
+      groups[i].push(...groups[j]);groups.splice(j,1);j=i;
+    }
+  }
+  const region=areas.find(r=>r.id===activeRegion);
+  for(const group of groups){
+    const v=group[0],cluster=group.length>1;
+    const b=button(cluster?String(group.length):code(v.seq),'pin'+(cluster?' cluster':'')+(v.id===selected?' selected':''),e=>{
+      if(placing)return;
+      e.stopPropagation();
+      if(cluster)expandCluster(group);else{el('cluster-panel').hidden=true;show(v.id,true);}
+    });
+    const x=group.reduce((sum,p)=>sum+p.x,0)/group.length;
+    const y=group.reduce((sum,p)=>sum+p.y,0)/group.length;
+    b.style.left=x*100+'%';b.style.top=y*100+'%';
+    const outside=activeRegion&&(activeRegion==='none'?group.every(p=>matchingRegions(p).length):region&&group.every(p=>!inRegion(p,region)));
+    b.classList.toggle('outside',!!outside);
+    b.title=cluster?group.length+' 个阀门，点击展开':v.fields.name;
+    b.setAttribute('aria-label',cluster?'展开 '+group.length+' 个阀门':code(v.seq)+' '+v.fields.name);
     plane.append(b);
-  });
+  }
+}
+function expandCluster(group){
+  focusBounds(Math.min(...group.map(v=>v.x)),Math.min(...group.map(v=>v.y)),
+    Math.max(...group.map(v=>v.x)),Math.max(...group.map(v=>v.y)),Math.min(64,zoom*2));
+  const panel=el('cluster-panel');panel.replaceChildren();
+  const head=make('div','cluster-head');
+  head.append(make('strong','',group.length+' 个相邻阀门'),button('×','close',()=>panel.hidden=true));
+  panel.append(head);
+  for(const v of group){
+    panel.append(button('V-'+code(v.seq)+'  '+v.fields.name,'cluster-choice',()=>{panel.hidden=true;show(v.id,true);centerValve(v);}));
+  }
+  panel.hidden=false;
 }
 function show(id,fromMap=false) {
-  selected=id;setPlacing(null);
+  if(id)selected=id;
+  closePanel();setPlacing(null);
   const v=records.find(x=>x.id===id);
   el('detail').hidden=!v;el('inventory').hidden=!!v;
   if(v){
     const d=el('detail');d.replaceChildren();
-    d.append(button('‹  返回清单','back',()=>show(null)));
+    const bar=make('div','detail-bar');
+    bar.append(button('‹  返回清单','back',()=>{show(null);if(phone.matches)mobileView('records');}),
+      button('展开资料','detail-expand phone-label',()=>{
+        const expanded=document.body.dataset.expanded!=='true';
+        document.body.dataset.expanded=String(expanded);
+        bar.querySelector('.detail-expand').textContent=expanded?'半屏显示':'展开资料';
+      }),button('×','sheet-close phone-label',closePanel));
+    d.append(bar);
     const heading=make('div','detail-title');heading.append(make('span','number','V-'+code(v.seq)),make('span','subtle','阀门资料'));
     d.append(heading,make('h2','',v.fields.name));
     if(v.x===null)d.append(make('p','pending-info','待定位 · 请在图纸上确认实际位置。'));
@@ -135,28 +279,39 @@ function show(id,fromMap=false) {
     const locationRow=make('div');
     locationRow.append(make('dt','','位置'),make('dd','',v.x===null?'待定位':'X '+(v.x*100).toFixed(2)+'% · Y '+(v.y*100).toFixed(2)+'%'));
     const regionRow=make('div');regionRow.append(make('dt','','区域'),make('dd','',matchingRegions(v).map(r=>r.name).join('、')||'未分区'));
-    dl.append(locationRow,regionRow);
+    const extra=make('details','extra-fields');
+    extra.append(make('summary','','位置与其他资料'));
+    const extraList=make('dl');extraList.append(locationRow,regionRow);
+    const missing=[];
     for(const [key,label] of Object.entries(fieldLabels)){
       if(key==='name')continue;
-      const row=make('div');row.append(make('dt','',label),make('dd','',v.fields[key]||'—'));dl.append(row);
+      if(!v.fields[key]){missing.push(label);continue;}
+      const row=make('div');row.append(make('dt','',label),make('dd','',v.fields[key]));
+      (key==='notes'?extraList:dl).append(row);
     }
+    if(missing.length)extraList.append(make('p','subtle','未填写字段 · '+missing.join('、')));
+    extra.append(extraList);
     const actions=make('div','detail-actions');
     if(v.x!==null)actions.append(button('查看位置','phone-label primary',()=>{
-      mobileView('map');centerValve(v);
+      closePanel();mobileView('map');centerValve(v);
     }));
     actions.append(button('编辑资料','',()=>openEdit(v)),button(v.x===null?'在图上定位':'移动点位',v.x===null?'primary':'',()=>{setPlacing(v);if(!phone.matches)viewport.scrollIntoView({block:'nearest'});}),button('移除','remove',()=>{
       removeTarget=v;el('delete-text').textContent='从图纸移除「'+v.fields.name+'」？';openDialog('delete-dialog');
     }));
-    d.append(dl,actions);
+    d.append(dl,extra,actions);
     if(!fromMap)centerValve(v);
-    if(phone.matches){mobileView('records');d.scrollTop=0;}
+    if(phone.matches){
+      mobileView('map');document.body.dataset.panel='detail';d.scrollTop=0;
+      centerValve(v);
+    }
   }
+  el('list').querySelectorAll('.row').forEach(row=>row.classList.toggle('is-selected',row.dataset.id===selected));
   renderPins();
 }
 function centerValve(v){
   if(!ready||v.x===null)return;
-  tx=viewport.clientWidth/2-v.x*img.naturalWidth*base*zoom;
-  ty=viewport.clientHeight/2-v.y*img.naturalHeight*base*zoom;
+  tx=visibleMapWidth()/2-v.x*img.naturalWidth*base*zoom;
+  ty=visibleMapHeight()/2-v.y*img.naturalHeight*base*zoom;
   syncView();
 }
 function renderList(){
@@ -165,10 +320,14 @@ function renderList(){
   const found=records.filter(v=>(!activeRegion||(activeRegion==='none'?!matchingRegions(v).length:region&&inRegion(v,region)))&&[v.fields.name,v.fields.model,'V-'+code(v.seq)].join(' ').toLowerCase().includes(q));
   const list=el('list');list.replaceChildren();el('count').textContent=found.length;
   el('mobile-count').textContent=records.length;
+  const located=found.filter(v=>v.x!==null).length;
+  el('list-summary').textContent=(found.length!==records.length?'显示 '+found.length+' / '+records.length+' · ':'')+
+    located+' 已定位 · '+(found.length-located)+' 待定位';
   for(const v of found){
     const row=button('','row',()=>show(v.id)),desc=make('span','desc');
-    desc.append(make('strong','',v.fields.name),make('small','',[v.x===null?'待定位':'',v.fields.type,v.fields.diameter].filter(Boolean).join('  ·  ')||'查看资料'));
-    row.append(make('span','number',code(v.seq)),desc,make('span','chev','›'));list.append(row);
+    row.dataset.id=v.id;row.classList.toggle('is-selected',v.id===selected);
+    desc.append(make('strong','',v.fields.name),make('small','',[v.x===null?'待定位':'',v.fields.model||v.fields.type,v.fields.diameter].filter(Boolean).join('  ·  ')));
+    row.append(make('span','number','V-'+code(v.seq)),desc,make('span','chev','›'));list.append(row);
   }
   if(!found.length)list.append(make('p','empty',q?'没有匹配的阀门。':activeRegion?'这个区域还没有阀门。':'这张图纸还没有点位。点击「添加点位」开始标记。'));
   regionOptions();
@@ -176,7 +335,8 @@ function renderList(){
 el('filter').oninput=renderList;
 async function loadPlan(id){
   const ticket=++version;
-  planId=id;ready=false;setPlacing(null);el('add').disabled=true;
+  planId=id;ready=false;selected=null;tileManifest=null;setPlacing(null);el('add').disabled=true;
+  el('tiles').replaceChildren();el('cluster-panel').hidden=true;
   records=[];areas=[];activeRegion='';el('filter').value='';renderList();show(null);plane.hidden=true;
   el('add-region').disabled=true;
   el('sample-tag').hidden=!id.startsWith('cad-');
@@ -189,6 +349,9 @@ async function loadPlan(id){
     if(ticket!==version)return;
     records=rows;areas=regions;plane.style.width=img.naturalWidth+'px';plane.style.height=img.naturalHeight+'px';
     ready=true;el('add').disabled=false;el('add-region').disabled=false;plane.hidden=false;resizeMap('initial');renderPins();renderList();
+    fetch('/api/plans/'+encodeURIComponent(id)+'/tiles/manifest.json').then(r=>r.ok?r.json():null).then(manifest=>{
+      if(ticket!==version)return;tileManifest=manifest;renderTiles();
+    }).catch(()=>{});
   }catch(e){if(ticket===version){el('map-alert').hidden=false;el('map-alert').textContent='图纸加载失败，刷新页面后重试';throw e;}}
 }
 async function loadPlans(preferred){
@@ -201,12 +364,13 @@ async function loadPlans(preferred){
 el('plans').onchange=()=>loadPlan(el('plans').value).catch(e=>toast(e.message));
 function localPoint(e){const r=viewport.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
 const pointers=new Map();let tap=null;
+el('cluster-panel').addEventListener('wheel',e=>e.stopPropagation());
 function pair(){
   const [a,b]=[...pointers.values()];
   return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.hypot(a.x-b.x,a.y-b.y)};
 }
 viewport.addEventListener('pointerdown',e=>{
-  if(!ready||e.button!==0||(!placing&&e.target.closest('.pin,.region-label')))return;
+  if(!ready||e.button!==0||e.target.closest('#cluster-panel')||(!placing&&e.target.closest('.pin,.region-label')))return;
   e.preventDefault();viewport.setPointerCapture(e.pointerId);
   const p=localPoint(e);pointers.set(e.pointerId,p);tap=pointers.size===1?p:null;viewport.classList.add('drag');
 });
@@ -240,7 +404,10 @@ function endPointer(e){
 viewport.onpointerup=endPointer;viewport.onpointercancel=endPointer;
 viewport.addEventListener('wheel',e=>{e.preventDefault();const p=localPoint(e);magnify(zoom*Math.exp(-Math.max(-300,Math.min(300,e.deltaY))*.002),p.x,p.y);},{passive:false});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&placing)setPlacing(null);});
-function openDialog(id){const d=el(id);d.querySelector('.error').textContent='';d.showModal();}
+function openDialog(id){
+  el('page-actions').classList.remove('menu-open');el('more-button').setAttribute('aria-expanded','false');
+  const d=el(id);d.querySelector('.error').textContent='';d.showModal();
+}
 document.querySelectorAll('dialog').forEach(d=>{
   d.querySelectorAll('.close,.cancel').forEach(b=>b.onclick=()=>d.close());
   d.oncancel=e=>{if(d.querySelector('[type=submit]').disabled)e.preventDefault();};
@@ -286,7 +453,7 @@ onSubmit('region-form',async()=>{
   const r={...regionDraft,name:el('region-name').value.trim()};
   await api('/api/plans/'+encodeURIComponent(planId)+'/regions'+(r.rev?'/'+r.id:''),r.rev?'PUT':'POST',r);
   areas=await api('/api/plans/'+encodeURIComponent(planId)+'/regions');
-  activeRegion=r.id;el('region-dialog').close();show(null);renderList();mobileView('records');toast('区域已保存');
+  el('region-dialog').close();selectRegion(r.id,true);toast('区域已保存');
 });
 el('remove-region').onclick=async()=>{
   if(!confirm('移除区域「'+regionDraft.name+'」？阀门资料会保留。'))return;
